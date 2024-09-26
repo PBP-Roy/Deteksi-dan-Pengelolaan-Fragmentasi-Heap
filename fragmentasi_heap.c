@@ -1,180 +1,275 @@
+
 #include <stdio.h>
-#include <stdlib.h>
 #include <time.h>
-#include <unistd.h> // Untuk sleep()
 
-#define HEAP_SIZE 1024 * 1024 // 1 MB heap
-#define MAX_ALLOC_SIZE 1024   // Ukuran alokasi maksimum 1 KB
-#define ALLOC_ATTEMPTS 10000  // Jumlah percobaan alokasi
+#define MEMORY_SIZE 2750 * 2750 // Ukuran memori total
+#define NUM_BLOCKS 5             // Jumlah blok memori
 
-typedef struct Block
-{
-    size_t size;
-    int is_free;
-    struct Block *next;
-} Block;
+// Struktur untuk menyimpan informasi blok memori
+typedef struct {
+    int room;          // Ukuran asli blok memori
+    int occupied;      // Ukuran terisi dalam blok
+    int free;          // Status blok (1 untuk bebas, 0 untuk tidak bebas)
+} MemoryBlock;
 
-Block *heap_start = NULL;
 
-void init_heap()
-{
-    heap_start = (Block *)malloc(HEAP_SIZE);
-    heap_start->size = HEAP_SIZE - sizeof(Block);
-    heap_start->is_free = 1;
-    heap_start->next = NULL;
+
+// Fungsi untuk menemukan blok pertama yang cukup besar (First-Fit)
+int find_first_fit_block(MemoryBlock blocks[], int num_blocks, int size) {
+    for (int i = 0; i < num_blocks; i++) {
+        if (blocks[i].free && (blocks[i].room - blocks[i].occupied) >= size) {
+            return i;  // Mengembalikan indeks blok pertama yang sesuai
+        }
+    }
+    return -1;  // Tidak ditemukan blok yang cukup besar
 }
 
-void *my_malloc(size_t size)
-{
-    Block *current = heap_start;
-    while (current != NULL)
-    {
-        if (current->is_free && current->size >= size)
+// Fungsi untuk melakukan alokasi memori dengan algoritma First-Fit
+void first_fit_allocation(MemoryBlock blocks[], int num_blocks, int size) {
+    int block_index = find_first_fit_block(blocks, num_blocks, size);
+    
+    if (block_index == -1) {
+        printf("Tidak ada blok memori yang cukup besar untuk alokasi %d\n", size);
+    } else {
+        blocks[block_index].occupied += size;
+        if (blocks[block_index].occupied == blocks[block_index].room) {
+            blocks[block_index].free = 0;  // Jika terisi penuh, blok menjadi tidak bebas
+        }
+        printf("Dialokasikan %d memori pada blok %d\n", size, block_index);
+    }
+}
+
+// Fungsi untuk menemukan blok terbaik (Best-Fit)
+int find_best_fit_block(MemoryBlock blocks[], int num_blocks, int size) {
+    int best_index = -1;
+    int min_size = MEMORY_SIZE + 1;  // Set nilai awal ke ukuran memori terbesar
+
+    for (int i = 0; i < num_blocks; i++) {
+        if (blocks[i].free && (blocks[i].room - blocks[i].occupied) >= size && (blocks[i].room - blocks[i].occupied) < min_size) {
+            min_size = blocks[i].room - blocks[i].occupied;
+            best_index = i;
+        }
+    }
+    
+    return best_index;
+}
+
+// Fungsi untuk melakukan alokasi memori dengan algoritma Best-Fit
+void best_fit_allocation(MemoryBlock blocks[], int num_blocks, int size) {
+    int block_index = find_best_fit_block(blocks, num_blocks, size);
+    
+    if (block_index == -1) {
+        printf("Tidak ada blok memori yang cukup besar untuk alokasi %d\n", size);
+    } else {
+        blocks[block_index].occupied += size;
+        if (blocks[block_index].occupied == blocks[block_index].room) {
+            blocks[block_index].free = 0;  // Jika terisi penuh, blok menjadi tidak bebas
+        }
+        printf("Dialokasikan %d memori pada blok %d\n", size, block_index);
+    }
+}
+
+// Fungsi untuk menemukan blok terbesar (Worst-Fit)
+int find_worst_fit_block(MemoryBlock blocks[], int num_blocks, int size) {
+    int worst_index = -1;
+    int max_size = 0;
+    
+    for (int i = 0; i < num_blocks; i++) {
+        if (blocks[i].free && (blocks[i].room - blocks[i].occupied) >= size && (blocks[i].room - blocks[i].occupied) > max_size) {
+            max_size = blocks[i].room - blocks[i].occupied;
+            worst_index = i;
+        }
+    }
+    
+    return worst_index;
+}
+
+// Fungsi untuk melakukan alokasi memori dengan algoritma Worst-Fit
+void worst_fit_allocation(MemoryBlock blocks[], int num_blocks, int size) {
+    int block_index = find_worst_fit_block(blocks, num_blocks, size);
+    
+    if (block_index == -1) {
+        printf("Tidak ada blok memori yang cukup besar untuk alokasi %d\n", size);
+    } else {
+        blocks[block_index].occupied += size;
+        if (blocks[block_index].occupied == blocks[block_index].room) {
+            blocks[block_index].free = 0;  // Jika terisi penuh, blok menjadi tidak bebas
+        }
+        printf("Dialokasikan %d memori pada blok %d\n", size, block_index);
+    }
+}
+
+// Fungsi untuk menemukan blok berikutnya yang cukup besar (Next-Fit)
+int find_next_fit_block(MemoryBlock blocks[], int num_blocks, int size, int *last_allocated_index) {
+    int i = *last_allocated_index;
+
+    for (int count = 0; count < num_blocks; count++) {
+        if (blocks[i].free && (blocks[i].room - blocks[i].occupied) >= size) {
+            *last_allocated_index = i;  // Simpan posisi terakhir yang dialokasikan
+            return i;  // Mengembalikan indeks blok yang sesuai
+        }
+        i = (i + 1) % num_blocks;  // Berputar ke blok berikutnya
+    }
+    
+    return -1;  // Tidak ditemukan blok yang cukup besar
+}
+
+// Fungsi untuk melakukan alokasi memori dengan algoritma Next-Fit
+void next_fit_allocation(MemoryBlock blocks[], int num_blocks, int size, int *last_allocated_index) {
+    int block_index = find_next_fit_block(blocks, num_blocks, size, last_allocated_index);
+    
+    if (block_index == -1) {
+        printf("Tidak ada blok memori yang cukup besar untuk alokasi %d\n", size);
+    } else {
+        blocks[block_index].occupied += size;
+        if (blocks[block_index].occupied == blocks[block_index].room) {
+            blocks[block_index].free = 0;  // Jika terisi penuh, blok menjadi tidak bebas
+        }
+        printf("Dialokasikan %d memori pada blok %d\n", size, block_index);
+    }
+}
+
+void compact(MemoryBlock blocks[], int num_blocks) {
+    int element_index = 0;
+    int temp;
+    // Pindahkan semua blok yang terisi ke awal
+    for (int compact_index = 0; compact_index < num_blocks; compact_index++) {
+        for (element_index = compact_index; element_index < num_blocks; element_index++)
         {
-            if (current->size > size + sizeof(Block))
+            if (blocks[compact_index].free == 1)
             {
-                Block *new_block = (Block *)((char *)current + sizeof(Block) + size);
-                new_block->size = current->size - size - sizeof(Block);
-                new_block->is_free = 1;
-                new_block->next = current->next;
-                current->next = new_block;
-            }
-            current->size = size;
-            current->is_free = 0;
-            return (char *)current + sizeof(Block);
-        }
-        current = current->next;
-    }
-    return NULL;
-}
-
-void my_free(void *ptr)
-{
-    if (ptr == NULL)
-        return;
-    Block *block = (Block *)((char *)ptr - sizeof(Block));
-    block->is_free = 1;
-}
-
-size_t calculate_fragmentation()
-{
-    Block *current = heap_start;
-    size_t free_space = 0;
-    size_t largest_free_block = 0;
-
-    while (current != NULL)
-    {
-        if (current->is_free)
-        {
-            free_space += current->size;
-            if (current->size > largest_free_block)
-            {
-                largest_free_block = current->size;
+                int temp = blocks[compact_index].room - blocks[compact_index].occupied;
+                // printf("ID element_indeks : %d vs ID compact indeks : %d\n", element_index, compact_index);
+                if (blocks[element_index].occupied <= blocks[compact_index].room - blocks[compact_index].occupied && element_index != compact_index && (blocks[element_index].occupied != 0))
+                {
+                    printf("Memindahkan blok %d ke blok %d\n", element_index, compact_index);
+                    sleep(1);
+                    temp = blocks[element_index].occupied;
+                    blocks[compact_index].occupied += blocks[element_index].occupied;
+                    blocks[element_index].occupied -= temp;
+                }
             }
         }
-        current = current->next;
     }
 
-    return free_space - largest_free_block;
 }
 
-void print_heap_state()
-{
-    Block *current = heap_start;
-    printf("Heap State:\n");
-    while (current != NULL)
-    {
-        printf("Block at %p: size=%zu, is_free=%d\n",
-               (void *)current, current->size, current->is_free);
-        current = current->next;
+// Fungsi untuk menampilkan status blok memori
+void display_memory(MemoryBlock blocks[], int num_blocks) {
+    printf("Status blok memori:\n");
+    for (int i = 0; i < num_blocks; i++) {
+        printf("Blok %d: Ukuran Ruang = %d, Terisi = %d, Status = %s\n", 
+               i, blocks[i].room, blocks[i].occupied, 
+               blocks[i].free ? "Bebas" : "Tidak Bebas");
     }
+    printf("\n");
 }
 
-void compact_heap() {
-    Block *current = heap_start;
-    Block *last_free = NULL;
+int main() {
+    MemoryBlock memory_first[NUM_BLOCKS] = {
+        {6000, 0, 1}, {6500, 0, 1}, {9000, 0, 1}, {5000, 0, 1}, {1000, 0, 1}
+    };
+    MemoryBlock memory_best[NUM_BLOCKS] = {
+        {6000, 0, 1}, {6500, 0, 1}, {9000, 0, 1}, {5000, 0, 1}, {1000, 0, 1}
+    };
+    MemoryBlock memory_worst[NUM_BLOCKS] = {
+        {6000, 0, 1}, {6500, 0, 1}, {9000, 0, 1}, {5000, 0, 1}, {1000, 0, 1}
+    };
+    MemoryBlock memory_next[NUM_BLOCKS] = {
+        {6000, 0, 1}, {6500, 0, 1}, {9000, 0, 1}, {5000, 0, 1}, {1000, 0, 1}
+    };
 
-    while (current != NULL) {
-        if (current->is_free) {
-            if (last_free != NULL) {
-                // Gabungkan blok yang sedang bebas dengan blok sebelumnya
-                last_free->size += current->size + sizeof(Block);
-                last_free->next = current->next;
-            } else {
-                last_free = current;
-            }
-        } else {
-            last_free = NULL;
-        }
-        current = current->next;
+    int last_allocated_index = 0;
+    
+    // Ukuran alokasi yang berbeda
+    int allocation_sizes[] = {3000, 1000, 3000, 3000, 2000, 4000};    
+    int num_allocations = sizeof(allocation_sizes) / sizeof(allocation_sizes[0]);
+    
+    // Pengukuran waktu untuk first fit
+    clock_t start_time_first = clock();
+    printf("Memori awal first fit:\n");
+    display_memory(memory_first, NUM_BLOCKS);
+    
+    for (int i = 0; i < num_allocations; i++) {
+        first_fit_allocation(memory_first, NUM_BLOCKS, allocation_sizes[i]);
     }
-}
+    
+    printf("\nMemori setelah alokasi first fit:\n");
+    display_memory(memory_first, NUM_BLOCKS);
+    
+    // Melakukan kompaksi
+    compact(memory_first, NUM_BLOCKS);
+    printf("Memori setelah kompaksi:\n");
+    display_memory(memory_first, NUM_BLOCKS);
 
-void perform_experiment()
-{
-    void *allocated_blocks[ALLOC_ATTEMPTS] = {0};
-    clock_t start, end;
-    double total_allocation_time = 0;
-
-    for (int i = 0; i < ALLOC_ATTEMPTS; i++)
-    {
-        size_t size = rand() % MAX_ALLOC_SIZE + 1;
-
-        start = clock();
-        allocated_blocks[i] = my_malloc(size);
-        end = clock();
-
-        double allocation_time = ((double)(end - start)) / CLOCKS_PER_SEC;
-        total_allocation_time += allocation_time;
-
-        if (allocated_blocks[i] == NULL && i > 3900)
-        {
-            printf("Allocation failed at attempt %d. Analyzing heap state...\n", i);
-            print_heap_state();
-            sleep(1); // Tambahkan delay
-            break;
-        }
-
-        if (i % 100 == 0)
-        {
-            printf("Iteration %d\n", i);
-            for (size_t i = 0; i < 100; i++)
-            {
-                printf("=");
-            }
-            printf("\n");
-            size_t frag = calculate_fragmentation();
-            printf("Fragmentation after %d allocations: %zu bytes\n", i, frag);
-            printf("Average allocation time after %d allocations: %f seconds\n\n", i, total_allocation_time / (i + 1));
-
-            // compact_heap(); // Kompakkan heap setiap 100 alokasi
-
-            size_t frag_after = calculate_fragmentation();
-            printf("Fragmentation after compaction after %d allocations: %zu bytes\n", i, frag_after);
-            printf("Average allocation time after %d allocations: %f seconds\n", i, total_allocation_time / (i + 1));
-            for (size_t i = 0; i < 100; i++)
-            {
-                printf("=");
-            }
-            printf("\n\n");
-
-            // Tambahkan delay untuk visualisasi eksperimen
-            sleep(1);
-        }
-
-        // Mengalokasikan dan membebaskan blok secara acak untuk meningkatkan fragmentasi
-        if (rand() % 2 == 0 && allocated_blocks[i])
-        {
-            my_free(allocated_blocks[i]);
-            allocated_blocks[i] = NULL;
-        }
+    clock_t end_time_first = clock();
+    double elapsed_time_first = (double)(end_time_first - start_time_first) / CLOCKS_PER_SEC;
+    
+    printf("\nWaktu eksekusi first fit: %.6f detik\n", elapsed_time_first);
+    
+    clock_t start_time_best = clock();
+    printf("\nMemori awal best fit:\n");
+    display_memory(memory_best, NUM_BLOCKS);
+    
+    for (int i = 0; i < num_allocations; i++) {
+        best_fit_allocation(memory_best, NUM_BLOCKS, allocation_sizes[i]);
     }
-}
+    
+    printf("\nMemori setelah alokasi best fit:\n");
+    display_memory(memory_best, NUM_BLOCKS);
+    
+    // Melakukan kompaksi
+    compact(memory_best, NUM_BLOCKS);
+    printf("Memori setelah kompaksi:\n");
+    display_memory(memory_best, NUM_BLOCKS);
 
-int main()
-{
-    srand(time(NULL));
-    init_heap();
-    perform_experiment();
+    clock_t end_time_best = clock();
+    double elapsed_time_best = (double)(end_time_best - start_time_best) / CLOCKS_PER_SEC;
+    
+    printf("\nWaktu eksekusi best fit: %.6f detik\n", elapsed_time_best);
+    
+
+    clock_t start_time_worst = clock();
+    printf("\nMemori awal worst fit:\n");
+    display_memory(memory_worst, NUM_BLOCKS);
+    
+    for (int i = 0; i < num_allocations; i++) {
+        worst_fit_allocation(memory_worst, NUM_BLOCKS, allocation_sizes[i]);
+    }
+    
+    printf("\nMemori setelah alokasi worst fit:\n");
+    display_memory(memory_worst, NUM_BLOCKS);
+    
+    // Melakukan kompaksi
+    compact(memory_worst, NUM_BLOCKS);
+    printf("Memori setelah kompaksi:\n");
+    display_memory(memory_worst, NUM_BLOCKS);
+
+    clock_t end_time_worst = clock();
+    double elapsed_time_worst = (double)(end_time_worst - start_time_worst) / CLOCKS_PER_SEC;
+    
+    printf("\nWaktu eksekusi worst fit: %.6f detik\n", elapsed_time_worst);
+    
+    clock_t start_time_next = clock();
+    printf("\nMemori awal next fit:\n");
+    display_memory(memory_next, NUM_BLOCKS);
+    
+    for (int i = 0; i < num_allocations; i++) {
+        next_fit_allocation(memory_next, NUM_BLOCKS, allocation_sizes[i], &last_allocated_index);
+    }
+    
+    printf("\nMemori setelah alokasi next fit:\n");
+    display_memory(memory_next, NUM_BLOCKS);
+    
+    // Melakukan kompaksi
+    compact(memory_next, NUM_BLOCKS);
+    printf("Memori setelah kompaksi:\n");
+    display_memory(memory_next, NUM_BLOCKS);
+
+    clock_t end_time_next = clock();
+    double elapsed_time_next = (double)(end_time_next - start_time_next) / CLOCKS_PER_SEC;
+    
+    printf("\nWaktu eksekusi next fit: %.6f detik\n", elapsed_time_next);
+    
     return 0;
 }
